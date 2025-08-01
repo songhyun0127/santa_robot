@@ -27,7 +27,6 @@ def main(args=None):
             set_tool,
             set_tcp,
             movej,
-            movel,
             DR_FC_MOD_REL,
             DR_AXIS_Z,
             DR_BASE,
@@ -51,14 +50,17 @@ def main(args=None):
         # 초기 위치로 이동
         movej(home, vel=VELOCITY, acc=ACC)
         time.sleep(5)
-        movej(box_pos, vel=VELOCITY, acc=ACC, ref=DR_BASE)
+
+        movej(box_pos, vel=VELOCITY, acc=ACC)
         print("force_control_start")
+
         task_compliance_ctrl(stx=[100, 100, 100, 100, 100, 100])
         time.sleep(0.1)
         set_desired_force(fd=[0, 0, -20, 0, 0, 0], dir=[0, 0, 1, 0, 0, 0], mod=DR_FC_MOD_REL)
         time.sleep(0.1)
         while not check_force_condition(DR_AXIS_Z, max=10):
             pass
+
         time.sleep(0.1)
         release_force()
         time.sleep(0.1)
