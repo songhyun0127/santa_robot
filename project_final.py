@@ -1,6 +1,9 @@
 import rclpy
 import DR_init
 import time
+from rclpy.node import Node
+from std_msgs.msg import String
+import queue
 
 ROBOT_ID = "dsr01"
 ROBOT_MODEL = "m0609"
@@ -11,9 +14,26 @@ DR_init.__dsr__model = ROBOT_MODEL
 
 OFF, ON = 0, 1
 
+order_queue = queue.Queue()
+
+def order_callback(msg):
+    order = msg.data.strip().lower()
+    if order in ['인형', '레고']:
+        print(f"📨 주문 수신: {order}")
+        order_queue.put(order)
+    else:
+        print(f"⚠️ 알 수 없는 주문: {msg.data}")
+
 def main(args=None):
     rclpy.init(args=args)
     node = rclpy.create_node("force_control", namespace=ROBOT_ID)
+
+    node.create_subscription(
+        String,
+        '/order_info',
+        order_callback,
+        10
+    )
 
     DR_init.__dsr__node = node
 
@@ -65,42 +85,55 @@ def main(args=None):
 
     set_digital_output(2, OFF)
     set_digital_output(1, OFF)
+    cnt = 0
+    print("👉 산타 로봇 작동 시작...")
 
     while rclpy.ok():
         # 초기 위치로 이동
+        ###########################################################
+        
         movej(home, vel=VELOCITY, acc=ACC)
         time.sleep(1)
         set_digital_output(2, ON)
         set_digital_output(1, OFF)
 
-        movel(box_pos, vel=VELOCITY, acc=ACC)
-        print("force_control_start")
+        ###########################################################
+        rclpy.spin_once(node, timeout_sec=0.1)
+        if order_queue.empty():
+            time.sleep(0.1)
+            continue
 
-        task_compliance_ctrl(stx=[100, 100, 100, 100, 100, 100])
-        time.sleep(0.1)
-        set_desired_force(fd=[0, 0, -20, 0, 0, 0], dir=[0, 0, 1, 0, 0, 0], mod=DR_FC_MOD_REL)
-        time.sleep(0.1)
-        while not check_force_condition(DR_AXIS_Z, max=10):
-            pass
+        current_order = order_queue.get()
+        print(f"🔧 주문 처리 시작: {current_order}")
 
-        time.sleep(0.1)
-        release_force()
-        time.sleep(0.1)
-        release_compliance_ctrl()
-        print("force_control_end")
+        ###########################################################
 
-        movej(home, vel=VELOCITY, acc=ACC)
+        if cnt == 0:
+            movel(box_pos, vel=VELOCITY, acc=ACC)
+            print("force_control_start")
 
-        proceed = input("▶️ 실험을 시작할까요? (y/n): ").strip().lower()
-        if proceed != 'y':
-            break
+            task_compliance_ctrl(stx=[100, 100, 100, 100, 100, 100])
+            time.sleep(0.1)
+            set_desired_force(fd=[0, 0, -20, 0, 0, 0], dir=[0, 0, 1, 0, 0, 0], mod=DR_FC_MOD_REL)
+            time.sleep(0.1)
+            while not check_force_condition(DR_AXIS_Z, max=10):
+                pass
 
-        set_digital_output(2, OFF)
-        set_digital_output(1, ON)
+            time.sleep(0.1)
+            release_force()
+            time.sleep(0.1)
+            release_compliance_ctrl()
+            print("force_control_end")
+            cnt = 1
+
+        ###########################################################
 
         # 초기 위치 이동
         print("👉 초기 자세 이동 중...")
         movej(home, vel=VELOCITY, acc=ACC)
+
+        set_digital_output(2, OFF)
+        set_digital_output(1, ON)
 
         print("👉 실험 위치로 이동 중...")
         movel(test_position_low, vel=VELOCITY, acc=ACC, ref=DR_BASE)
@@ -129,7 +162,6 @@ def main(args=None):
             force = get_tool_force()
             fz = force[2]
             force_log.append(fz)
-            print(f"   ▶ Fz: {fz:.2f} N")
             time.sleep(log_interval)
 
         # 제어 해제
@@ -140,93 +172,112 @@ def main(args=None):
 
         # 분류
         fz_abs_max = max(abs(f) for f in force_log)
-        if fz_abs_max >= 10.0:
-            print(f"🔵 결과: 단단한(hard) 물체로 판단됨 (|Fz| 최대 = {fz_abs_max:.2f}N)")
-            movel(test_position, vel=VELOCITY, acc= ACC)
-            
-            # release
-            set_digital_output(2, ON)
-            set_digital_output(1, OFF)
+        result_type = "레고" if fz_abs_max >= 10.0 else "인형"
 
-            down = test_position.copy()
-            down[2] -= 30
-            movel(down, vel=VELOCITY, acc= ACC)
+        if result_type == current_order:
+            print(f"✅ 주문 일치: {result_type} → 픽앤플레이스 수행")
+            cnt = 0
+            if fz_abs_max >= 10.0:
+                print(f"🔵 결과: 단단한(hard) 물체로 판단됨 (|Fz| 최대 = {fz_abs_max:.2f}N)")
+                movel(test_position, vel=VELOCITY, acc= ACC)
+                
+                # release
+                set_digital_output(2, ON)
+                set_digital_output(1, OFF)
+                time.sleep(2.0)
+                
+
+                down = test_position.copy()
+                down[2] -= 30
+                movel(down, vel=VELOCITY, acc= ACC)
+
+                # grip
+                set_digital_output(1, ON)
+                set_digital_output(2, OFF)
+                
+                time.sleep(2.0)
+
+                movel(test_position_low, vel=VELOCITY, acc= ACC)
+                movel(box_pos, vel= VELOCITY, acc = ACC)
+                down_th = box_pos.copy()
+                down_th[2] -= 100
+                movel(down_th, vel=VELOCITY, acc= ACC)
+
+                # release
+                set_digital_output(2, ON)
+                set_digital_output(1, OFF)
+                
+                time.sleep(2.0)
+
+
+            else:
+                print(f"🟢 결과: 부드러운(soft) 물체로 판단됨 (|Fz| 최대 = {fz_abs_max:.2f}N)")
+                
+                movel(test_position, vel=VELOCITY, acc= ACC)
+                
+                # release
+                set_digital_output(2, ON)
+                set_digital_output(1, ON)
+                time.sleep(2.0)
+
+                down = test_position.copy()
+                down[2] -= 35
+                movel(down, vel=VELOCITY, acc= ACC)
+
+                # grip
+                set_digital_output(2, OFF)
+                set_digital_output(1, OFF)
+                time.sleep(2.0)
+
+                movel(test_position_low, vel=VELOCITY, acc= ACC)
+                movel(box_pos, vel= VELOCITY, acc = ACC)
+                down_th = box_pos.copy()
+                down_th[2] -= 100
+                movel(down_th, vel=VELOCITY, acc= ACC)
+
+                # release
+                set_digital_output(2, ON)
+                set_digital_output(1, OFF)
+                
+                time.sleep(2.0)
+
+            movesx(box_top, vel=VELOCITY, acc=ACC, time=10, vel_opt=DR_MVS_VEL_CONST)
 
             # grip
-            set_digital_output(2, OFF)
             set_digital_output(1, ON)
+            set_digital_output(2, OFF)
+            
+            time.sleep(3)
 
-            movel(test_position_low, vel=VELOCITY, acc= ACC)
-            movel(box_pos, vel= VELOCITY, acc = ACC)
-            down_th = box_pos.copy()
-            down_th[2] -= 100
-            movel(down_th, vel=VELOCITY, acc= ACC)
+            movesx(box_close, vel=VELOCITY, acc=ACC, time=10, vel_opt=DR_MVS_VEL_CONST)
 
-            # release
-            set_digital_output(2, ON)
+            task_compliance_ctrl(stx=[100, 100, 100, 100, 100, 100])
+            time.sleep(0.1)
+            set_desired_force(fd=[0, 0, -15, 0, 0, 0], dir=[0, 0, 1, 0, 0, 0], mod=DR_FC_MOD_REL)
+            time.sleep(0.1)
+            amove_periodic(amp=[0,0,0,0,0,1.5], period=1.0, atime=0.2, repeat=15, ref=DR_TOOL)
+            while not check_force_condition(DR_AXIS_Z, max=10):
+                time.sleep(0.1)
+                pass
+
+            time.sleep(0.1)
+            release_force()
+            time.sleep(0.1)
+            release_compliance_ctrl()
+
             set_digital_output(1, OFF)
+            set_digital_output(2, ON)
+            time.sleep(0.5)
 
+            print("———————————————")
 
         else:
-            print(f"🟢 결과: 부드러운(soft) 물체로 판단됨 (|Fz| 최대 = {fz_abs_max:.2f}N)")
-            
-            movel(test_position, vel=VELOCITY, acc= ACC)
-            
-            # release
-            set_digital_output(2, ON)
-            set_digital_output(1, ON)
-            time.sleep(1)
+            print(f"❌ 주문 불일치: 주문={current_order}, 감지={result_type}")
+            print("⚠️ 사용자에게 알림: 잘못된 물체입니다.")
+            movej(home, vel=VELOCITY, acc=ACC)
+            print("🏠 홈으로 복귀 후 대기 중...")
 
-            down = test_position.copy()
-            down[2] -= 35
-            movel(down, vel=VELOCITY, acc= ACC)
-
-            # grip
-            set_digital_output(2, OFF)
-            set_digital_output(1, OFF)
-            time.sleep(1)
-
-            movel(test_position_low, vel=VELOCITY, acc= ACC)
-            movel(box_pos, vel= VELOCITY, acc = ACC)
-            down_th = box_pos.copy()
-            down_th[2] -= 100
-            movel(down_th, vel=VELOCITY, acc= ACC)
-
-            # release
-            set_digital_output(2, ON)
-            set_digital_output(1, OFF)
-            time.sleep(1)
-
-        movesx(box_top, vel=VELOCITY, acc=ACC, time=5, vel_opt=DR_MVS_VEL_CONST)
-
-        # grip
-        set_digital_output(2, OFF)
-        set_digital_output(1, ON)
-        time.sleep(3)
-
-        movesx(box_close, vel=VELOCITY, acc=ACC, time=5, vel_opt=DR_MVS_VEL_CONST)
-
-        task_compliance_ctrl(stx=[100, 100, 100, 100, 100, 100])
-        time.sleep(0.1)
-        set_desired_force(fd=[0, 0, -15, 0, 0, 0], dir=[0, 0, 1, 0, 0, 0], mod=DR_FC_MOD_REL)
-        time.sleep(0.1)
-        amove_periodic(amp=[0,0,0,0,0,1.5], period=1.0, atime=0.2, repeat=15, ref=DR_TOOL)
-        while not check_force_condition(DR_AXIS_Z, max=10):
-            print(check_force_condition(DR_AXIS_Z, max=10))
-            
-            time.sleep(0.1)
-            print('periodic end')
-            pass
-
-        time.sleep(0.1)
-        release_force()
-        time.sleep(0.1)
-        release_compliance_ctrl()
-
-        set_digital_output(2, OFF)
-        set_digital_output(1, ON)
-
-        print("———————————————")
+        ############################################################################
 
     rclpy.shutdown()
 
