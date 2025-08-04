@@ -2,8 +2,8 @@ from PIL import Image, ImageTk
 import tkinter as tk
 from ui.style import BUTTON_FONT
 from logic.santa_logic import handle_send_gift
-#import rclpy
-#from std_msgs.msg import String
+import rclpy
+from std_msgs.msg import String
 
 class GiftUI:
     def __init__(self, root):
@@ -82,22 +82,19 @@ class GiftUI:
     def _close_popup(self, overlay, popup):
         overlay.destroy()
         popup.destroy()
-    '''
-        # 포장하기 버튼 누르면 퍼블리시
     def _confirm_gift(self, overlay, popup):
-        # ROS 퍼블리시
         rclpy.init(args=None)
         node = rclpy.create_node("gift_gui_publisher")
-        pub = node.create_publisher(String, "/gift/command", 10)
+        pub = node.create_publisher(String, "/order_info", 10)
 
         msg = String()
-        msg.data = self.selected_card  
+        # 내부 선택값 "doll" / "lego" → 한글 변환
+        msg.data = "인형" if self.selected_card == "doll" else "레고"
         pub.publish(msg)
 
-        print(f"Published gift command: {msg.data}")
+        print(f"📤 Published gift command: {msg.data}")
         node.destroy_node()
         rclpy.shutdown()
 
         overlay.destroy()
         popup.destroy()
-'''
