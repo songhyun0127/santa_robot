@@ -2,8 +2,8 @@ from PIL import Image, ImageTk
 import tkinter as tk
 from ui.style import BUTTON_FONT
 from logic.santa_logic import handle_send_gift
-#import rclpy
-#from std_msgs.msg import String
+import rclpy
+from std_msgs.msg import String
 
 class GiftUI:
     def __init__(self, root):
@@ -41,13 +41,13 @@ class GiftUI:
         self.doll_btn = tk.Frame(card_frame, bd=2, relief="groove", bg="white", highlightthickness=2)
         self.doll_btn.grid(row=0, column=0, padx=10)
         tk.Label(self.doll_btn, text="인형", font=("맑은 고딕", 11, "bold"), bg="white").pack(pady=(10, 2))
-        tk.Label(self.doll_btn, text="귀여운 인형 카드\n이미지로 전송됩니다", bg="white").pack(pady=5)
+        tk.Label(self.doll_btn, bg="white").pack(pady=5)
         self.doll_btn.bind("<Button-1>", lambda e: self.select_card("doll"))
 
         self.lego_btn = tk.Frame(card_frame, bd=2, relief="groove", bg="white", highlightthickness=2)
         self.lego_btn.grid(row=0, column=1, padx=10)
         tk.Label(self.lego_btn, text="레고", font=("맑은 고딕", 11, "bold"), bg="white").pack(pady=(10, 2))
-        tk.Label(self.lego_btn, text="레고 이미지 카드\n아이에게 좋아요", bg="white").pack(pady=5)
+        tk.Label(self.lego_btn, bg="white").pack(pady=5)
         self.lego_btn.bind("<Button-1>", lambda e: self.select_card("lego"))
 
         self.select_card("lego")
@@ -74,7 +74,7 @@ class GiftUI:
     def _close_popup(self, overlay, popup):
         overlay.destroy()
         popup.destroy()
-    '''
+
         # 포장하기 버튼 누르면 퍼블리시
     def _confirm_gift(self, overlay, popup):
         # ROS 퍼블리시
@@ -92,4 +92,3 @@ class GiftUI:
 
         overlay.destroy()
         popup.destroy()
-'''
