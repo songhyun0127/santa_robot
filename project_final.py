@@ -30,7 +30,7 @@ def main(args=None):
 
     node.create_subscription(
         String,
-        '/order_info',
+        '/dsr01/order_info',
         order_callback,
         10
     )
@@ -48,10 +48,12 @@ def main(args=None):
             set_tcp,
             movej,
             movel,
+            movec,
             movesx,
             get_tool_force,
             set_digital_output,
             amove_periodic,
+
             DR_FC_MOD_REL, 
             DR_AXIS_Z,
             DR_BASE, DR_TOOL, DR_MVS_VEL_CONST,
@@ -78,6 +80,12 @@ def main(args=None):
 
     box_top = [box_pos, box_top1, box_top2]
     box_close = [box_top1, box_top3]
+
+    box_tape1 = posx([396.16, -46.80, 166.49, 170.34, 180, 170.49])
+    box_tape2 = posx([396.16, -46.80, 6.28, 173.34, -180, 173.59])
+    box_tape3 = posx([397.28, 115.59, 208.18, 28.22, 180, 28.36])
+    box_tape4 = posx([396.47, 178.96, 42.6, 23.41, 180, 22.55])
+    box_tape5 = posx([396.47, 178.96, 110, 23.41, 180, 22.55])
 
 
     set_tool("TCP208mm")
@@ -197,11 +205,13 @@ def main(args=None):
                 
                 time.sleep(2.0)
 
+                # begin_blend(radius=30)  
                 movel(test_position_low, vel=VELOCITY, acc= ACC)
                 movel(box_pos, vel= VELOCITY, acc = ACC)
                 down_th = box_pos.copy()
                 down_th[2] -= 100
                 movel(down_th, vel=VELOCITY, acc= ACC)
+                # end_blend()
 
                 # release
                 set_digital_output(2, ON)
@@ -237,7 +247,7 @@ def main(args=None):
 
                 # release
                 set_digital_output(2, ON)
-                set_digital_output(1, OFF)
+                set_digital_output(1, ON)
                 
                 time.sleep(2.0)
 
@@ -269,7 +279,27 @@ def main(args=None):
             set_digital_output(2, ON)
             time.sleep(0.5)
 
+            movel(box_tape1,vel=100, acc=100)
+            time.sleep(0.1)
+            movel(box_tape2,vel=100, acc=100)
+
+            # grip
+            set_digital_output(2, OFF)
+            set_digital_output(1, ON)
+            time.sleep(1)
+
+            movec(box_tape3, box_tape4, vel=VELOCITY, acc=ACC, radius=50)
+            time.sleep(0.1)
+
+            # release
+            set_digital_output(2, ON)
+            set_digital_output(1, OFF)
+            time.sleep(1)
+
+            movel(box_tape5, VELOCITY, ACC)
+
             print("———————————————")
+            print('🏠 주문 대기중..')
 
         else:
             print(f"❌ 주문 불일치: 주문={current_order}, 감지={result_type}")
