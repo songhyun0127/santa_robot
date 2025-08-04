@@ -1,8 +1,8 @@
 from PIL import Image, ImageTk
 import tkinter as tk
 from ui.style import BUTTON_FONT
-from logic.santa_logic import handle_send_gift
 import rclpy
+from rclpy.node import Node
 from std_msgs.msg import String
 
 class GiftUI:
@@ -74,21 +74,17 @@ class GiftUI:
             self.lego_btn.config(highlightbackground="blue")
             self.doll_btn.config(highlightbackground="gray")
 
-    def _confirm_gift(self, overlay, popup):
-        handle_send_gift(self.selected_card)
-        overlay.destroy()
-        popup.destroy()
-
     def _close_popup(self, overlay, popup):
         overlay.destroy()
         popup.destroy()
+        
     def _confirm_gift(self, overlay, popup):
-        rclpy.init(args=None)
+        if not rclpy.ok():
+            rclpy.init()
         node = rclpy.create_node("gift_gui_publisher")
         pub = node.create_publisher(String, "/order_info", 10)
 
         msg = String()
-        # 내부 선택값 "doll" / "lego" → 한글 변환
         msg.data = "인형" if self.selected_card == "doll" else "레고"
         pub.publish(msg)
 
