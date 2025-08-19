@@ -1,0 +1,5 @@
+경로 설정 필수!!
+
+61줄 model_path : fridge_best.pt
+
+218줄 model_path : pork_best.pt
